@@ -1,0 +1,22 @@
+# STM32CubeIDE build output
+Debug/
+Release/
+
+# IDE state
+.settings/
+*.launch
+
+# Build artifacts
+*.o
+*.d
+*.elf
+*.map
+*.su
+*.cyclo
+*.list
+*.bin
+*.hex
+
+# OS
+Thumbs.db
+.DS_Store

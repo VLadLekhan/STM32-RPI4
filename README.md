@@ -4,7 +4,7 @@ An STM32 (NUCLEO-F303RE) running FreeRTOS reads an MPU-6500 accelerometer, strea
 
 The architecture mirrors a drone setup: a microcontroller as the "flight controller" and a Linux companion computer handling video.
 
-<!-- TODO: add demo.gif / video link here -->
+https://youtu.be/Zsxq3Zx1Qy4
 
 ## Features
 
@@ -108,6 +108,37 @@ Raspberry Pi OS Lite (64-bit), headless over SSH.
    ```
 5. On the PC, open `udp://@:5000` in VLC.
 
+### Run as a systemd service (starts on boot)
+
+Copy the script to `/home/<user>/osd_stream.py` and create `/etc/systemd/system/osd-stream.service` (own services go in `/etc`, not `/usr/lib`, so package updates do not overwrite them):
+
+```ini
+[Unit]
+Description=OSD stream
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=<user>
+ExecStart=/usr/bin/python3 /home/<user>/osd_stream.py
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```
+sudo systemctl daemon-reload
+sudo systemctl enable --now osd-stream
+journalctl -u osd-stream -f
+```
+
+- `<user>` must belong to the `video` (camera) and `dialout` (`/dev/serial0`) groups.
+- After editing the script run `sudo systemctl restart osd-stream`: `start` does nothing for a service that is already running.
+- The script handles `SIGTERM` (sent by `systemctl stop`) and `Ctrl+C`, so the GStreamer pipeline is shut down and the camera is released properly.
+- Give the PC and the Pi fixed addresses with DHCP reservations in the router (by MAC address), so the receiver IP in the script does not change between reboots.
+
 To inspect the telemetry without video, point QGroundControl or `pymavlink` at the serial port (115200 baud) and open the MAVLink Inspector: `HEARTBEAT` and `RAW_IMU` should appear, with `xacc/yacc/zacc` around `16384` per g.
 
 ## Design notes and problems solved
@@ -117,10 +148,12 @@ To inspect the telemetry without video, point QGroundControl or `pymavlink` at t
 - **I2C transaction ends.** With `AUTOEND = 0` the end of a phase is flagged by `TC`; with `AUTOEND = 1` the peripheral sends STOP itself and raises `STOPF` instead. Waiting for the wrong flag hangs silently. All waits go through one helper that also checks `NACKF` and a timeout.
 - **DMA interrupt storm.** ADC in continuous mode with a one-element circular DMA buffer raises a transfer-complete interrupt after every conversion (hundreds of thousands per second), starving the RTOS tasks. CubeMX force-enables that IRQ, so it is disabled in code after `HAL_ADC_Start_DMA`.
 - **Timer clock.** TIM3 runs at 36 MHz here (not 72), so PSC = 35 and ARR = 19999 give 1 us ticks and a 20 ms period.
+- **Service restart policy.** `Restart=on-failure` restarts the script after a crash (tested with `kill -9`), but not after `SIGTERM` or a normal exit: `systemd` treats those as clean stops. Python's default `SIGTERM` handling skips the cleanup code, so the script registers its own handler with `GLib.unix_signal_add` to stop the main loop and shut the pipeline down.
+- **One reader per serial port.** `/dev/serial0` is read by the video script only; a second process reading it would steal bytes, so any logging belongs in the same reader thread.
 
 ## Status and roadmap
 
-Working: sensor to MAVLink to Raspberry Pi to video overlay, and potentiometer-controlled servo.
+Working: sensor to MAVLink to Raspberry Pi to video overlay (started on boot by a `systemd` service), and potentiometer-controlled servo.
 
 Planned:
 - Servo command from the Raspberry Pi over UART RX (`Task_ServoControl`), with camera-based motion detection (frame differencing) choosing the direction

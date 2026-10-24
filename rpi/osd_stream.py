@@ -2,11 +2,18 @@
 
 import threading
 import gi
+import signal
+import sys
 gi.require_version('Gst', '1.0')
 from gi.repository import Gst, GLib
 from pymavlink import mavutil
 
 Gst.init(None)
+
+def on_sigterm():
+ print("Signal is get!",flush=True)
+ loop.quit()
+ return GLib.SOURCE_REMOVE
 
 PIPELINE = (
     'libcamerasrc ! video/x-raw,width=1280,height=720,framerate=30/1,format=NV12 ! '
@@ -29,13 +36,35 @@ def read_mavlink():
         z = msg.zacc / 16384
         osd.set_property('text', f'X: {x:.2f} g  Y: {y:.2f} g  Z: {z:.2f} g')
 
+failed = False
+def on_message(bus, message):
+    global failed
+    if message.type == Gst.MessageType.ERROR:
+        err, debug = message.parse_error()
+        print("GST ERROR:", err, debug)
+        failed = True
+        loop.quit()
+    elif message.type == Gst.MessageType.WARNING:
+        warn, debug = message.parse_warning()
+        print("GST WARNING:", warn, debug)
 
+
+bus = pipeline.get_bus()
+bus.add_signal_watch()
+bus.connect("message", on_message)
 threading.Thread(target=read_mavlink, daemon=True).start()
 
 pipeline.set_state(Gst.State.PLAYING)
 loop = GLib.MainLoop()
+GLib.unix_signal_add(GLib.PRIORITY_DEFAULT, signal.SIGTERM, on_sigterm)
 try:
     loop.run()
 except KeyboardInterrupt:
     pass
 pipeline.set_state(Gst.State.NULL)
+if (failed):
+    sys.exit(1)
+
+
+
+

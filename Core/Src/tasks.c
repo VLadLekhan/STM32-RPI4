@@ -90,7 +90,7 @@ void StartTask_Servo(void *argument)
   {
 	  uint16_t us = SERVO_MIN + (adc_raw * (SERVO_MAX - SERVO_MIN)) / ADC_MAX;
 	  Servo_setPulse(us);
-    osDelay(20);
+	  osDelay(20);
   }
   /* USER CODE END StartTask_Servo */
 }

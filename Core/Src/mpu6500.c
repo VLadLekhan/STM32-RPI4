@@ -72,8 +72,8 @@ MPU6500_Status_t MPU6500_ReadAccel(int16_t *x,int16_t *y,int16_t *z){
 	uint8_t raw[6];
 	for (uint8_t i = 0; i < sizeof(raw)/sizeof(raw[0]); i++){
 
-	if (I2C_WaitFlag(I2C_ISR_RXNE, 20) != 0) return MPU6500_ERR_COMM;
-	raw[i] = I2C1 -> RXDR;
+		if (I2C_WaitFlag(I2C_ISR_RXNE, 20) != 0) return MPU6500_ERR_COMM;
+		raw[i] = I2C1 -> RXDR;
 
 	}
 
